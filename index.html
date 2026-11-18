@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mdd</title>
+</head>
+<body>
+<pre><code>
+# Manual de despliegue de aplicacion
+
+## Configurar el servidor D.N.S
+
+### Instalar bind9
+
+```bash
+sudo apt update
+sudo apt install bind9
+sudo service bind9 start
+sudo service bind9 status
+```
+
+### Añadir forwarders sudo nano /etc/bind/named.conf.options
+
+```
+options {
+    directory "/var/cache/bind";
+
+    forwarders {
+        8.8.8.8;
+        8.8.4.4;
+    };
+    forward only;
+
+    recursion yes;
+    allow-recursion { any; };
+
+    dnssec-validation auto;
+
+    listen-on { any; };
+    listen-on-v6 { any; };
+};
+```
+
+### Añadir zona sudo nano /etc/bind/named.conf.local
+
+```
+zone "tudominio.com" {
+    type master;
+    file "/etc/bind/db.tudominio.com";
+};
+```
+
+### Crear archivo db sudo nano /etc/bind/db.tudominio.com
+
+```
+$TTL 86400
+@   IN  SOA ns1.tudominio.com. admin.tudominio.com. (
+        2026060101 ; Serial
+        3600       ; Refresh
+        1800       ; Retry
+        604800     ; Expire
+        86400 )    ; Minimum TTL
+
+@                 IN      NS      ns1.tudominio.com.
+@                 IN      NS      ns2.tudominio.com.
+
+@                 IN      A       192.168.1.100
+ns1               IN      A       192.168.1.100
+ns2               IN      A       192.168.1.101
+proyecto          IN      A       192.168.1.100
+
+www               IN      CNAME   @
+api               IN      CNAME   @
+
+@                 IN      MX      1       aspmx.l.google.com.
+@                 IN      MX      5       alt1.aspmx.l.google.com.
+@                 IN      MX      5       alt2.aspmx.l.google.com.
+@                 IN      MX      10      alt3.aspmx.l.google.com.
+@                 IN      MX      10      alt4.aspmx.l.google.com.
+
+@                 IN      TXT     "text"
+@                 IN      TXT     "text"
+```
+
+### Comprobaciones
+
+```bash
+# Reiniciar bind9
+sudo service bind9 restart
+
+# Comprobar archivos
+sudo named-checkconf
+sudo named-checkzone tudominio.com /etc/bind/db.tudominio.com
+sudo rndc reload
+sudo rndc status
+sudo rndc zonestatus tudominio.com
+```
+
+```bash
+nslookup proyecto.tudominio.com 192.168.1.100
+nslookup -type=SOA proyecto.tudominio.com 192.168.1.100
+nslookup -type=MX proyecto.tudominio.com 192.168.1.100
+nslookup -type=TXT proyecto.tudominio.com 192.168.1.100
+nslookup www.google.es 192.168.1.100
+```
+
+## Instalar pila LAMP
+
+```bash
+# Actualizar la lista de paquetes del sistema
+sudo apt update && sudo apt upgrade -y
+
+# Instalar el servidor web Apache
+sudo apt install apache2 -y
+
+# Instalar MySQL Server (versión disponible en repositorios)
+sudo apt install mysql-server -y
+sudo systemctl enable --now mysql 
+mysql --version # 8.4.x 
+
+# Instalar PHP y la extensión de conexión PHP-MySQL
+sudo apt install -y php libapache2-mod-php php-mysql php-mbstring php-xml php-curl
+
+# Ejecutar el asistente de seguridad de MySQL (establecer contraseña root, eliminar usuarios anónimos, etc.)
+sudo mysql_secure_installation
+
+# Reiniciar Apache para asegurar que cargue PHP correctamente
+sudo systemctl restart apache2
+```
+
+Comprobación
+
+```bash
+# Verificar el estado y versión de Apache
+sudo service apache2 status
+apache2 -v
+
+# Verificar el estado y versión de MySQL
+sudo service mysql status
+mysql --version
+
+# Comprobar PHP y sus módulos
+php -v
+php -m | grep -E "mysql|mysqli|pdo"
+
+# Petición interna de prueba
+curl -I http://localhost
+```
+
+## Pasar de mod_php a PHP-FPM
+
+```
+sudo apt install -y php-fpm 
+sudo a2dismod php8.5 mpm_prefork 
+sudo a2enmod mpm_event proxy_fcgi setenvif 
+sudo a2enconf php8.5-fpm 
+sudo systemctl restart php8.5-fpm apache2
+```
+
+## Crea los virtualhost
+
+Crea los directorios correspondientes de los proyectos
+
+```bash
+# Crear directorios
+sudo mkdir -p /var/www/proyecto
+
+# Cambiales el dueño
+sudo chown -R ubuntu:www-data /var/www/proyecto
+```
+
+Virtualhost
+
+```bash
+sudo nano /etc/apache2/sites-available/proyecto.tudominio.com.conf
+```
+
+Copia la plantilla
+
+```
+&lt;VirtualHost *:80&gt;
+    ServerName proyecto.tudominio.com
+    DocumentRoot /var/www/proyecto
+
+    &lt;Directory /var/www/proyecto&gt;
+        Options -Indexes +FollowSymLinks
+        AllowOverride None
+        Require all granted
+    &lt;/Directory&gt;
+
+    ErrorLog ${APACHE_LOG_DIR}/proyecto-error.log
+    CustomLog ${APACHE_LOG_DIR}/proyecto-access.log combined
+&lt;/VirtualHost&gt;
+```
+
+## Importar proyectos
+
+```bash
+# importar proyectos y la carpeta config
+scp -i key.pem -r proyecto/. ubuntu@192.168.1.100:/var/www/proyecto/
+
+# importar scripts de base de datos
+scp -i key.pem ddbb.sql ubuntu@192.168.1.100:~/
+```
+
+Añade los permisos correspondientes
+
+```bash
+# Añadir permisos 755 en directorios y 644 en ficheros
+sudo chown -R ubuntu:www-data /var/www/proyecto
+sudo find /var/www/proyecto -type d -exec chmod 755 {} \;
+sudo find /var/www/proyecto -type f -exec chmod 644 {} \;
+```
+
+## Configurar las bases de datos
+
+Usa el comando mysql, copia y pega los comandos que estan abajo para crear los usuarios y darle los permisos a estos, recuerda cambiar las los marcadores por las contraseñas correspondientes
+
+```bash
+sudo mysql
+```
+
+```sql
+CREATE DATABASE IF NOT EXISTS proyecto_ddbb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'proyecto_user'@'localhost' IDENTIFIED BY '[contraseña_app1]';
+GRANT SELECT, INSERT, UPDATE, DELETE ON proyecto_ddbb.* TO 'proyecto_user'@'localhost';
+
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+Luego ejecuta los scripts sql
+
+```bash
+sudo mysql proyecto_ddbb &lt; ~/gestor-tareas.sql
+```
+
+## Activa los sitios y desactiva el 000-default
+
+```bash
+sudo a2ensite proyecto.tudominio.com
+sudo a2dissite 000-default.conf
+sudo apache2ctl configtest
+
+# recargar apache
+sudo systemctl reload apache2
+sudo apache2ctl -S
+```
+
+## Ingresar desde el navegador
+
+Ve a "configuracion > red e internet > wifi > propiedades de hardware > Asignacion de servidor DNS", escogemos la opción manual y ponemos la ip del dns.
+</code></pre>
+</body>
+</html>
