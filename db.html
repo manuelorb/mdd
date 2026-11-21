@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mdd DB</title>
+</head>
+<body>
+<h1>Plantilla /etc/bind/db.tudominio.com</h1><br><br><br>
+<pre><code>
+$TTL 86400
+@   IN  SOA ns1.tudominio.com. admin.tudominio.com. (
+        2026060101 ; Serial
+        3600       ; Refresh
+        1800       ; Retry
+        604800     ; Expire
+        86400 )    ; Minimum TTL
+
+@                 IN      NS      ns1.tudominio.com.
+@                 IN      NS      ns2.tudominio.com.
+
+@                 IN      A       192.168.1.100
+ns1               IN      A       192.168.1.100
+ns2               IN      A       192.168.1.101
+proyecto          IN      A       192.168.1.100
+
+www               IN      CNAME   @
+api               IN      CNAME   @
+
+@                 IN      MX      1       aspmx.l.google.com.
+@                 IN      MX      5       alt1.aspmx.l.google.com.
+@                 IN      MX      5       alt2.aspmx.l.google.com.
+@                 IN      MX      10      alt3.aspmx.l.google.com.
+@                 IN      MX      10      alt4.aspmx.l.google.com.
+
+@                 IN      TXT     "text"
+@                 IN      TXT     "text"
+</code></pre>
+</body>
+</html>

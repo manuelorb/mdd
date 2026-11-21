@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mdd virtualhost</title>
+</head>
+<body>
+<h1>Plantilla virtualhost /etc/apache2/sites-available/proyecto.tudominio.com.conf</h1>
+<pre><code>
+&lt;VirtualHost *:80&gt;
+    ServerName proyecto.tudominio.com
+    DocumentRoot /var/www/proyecto
+
+    &lt;Directory /var/www/proyecto&gt;
+        Options -Indexes +FollowSymLinks
+        AllowOverride None
+        Require all granted
+    &lt;/Directory&gt;
+
+    ErrorLog ${APACHE_LOG_DIR}/proyecto-error.log
+    CustomLog ${APACHE_LOG_DIR}/proyecto-access.log combined
+&lt;/VirtualHost&gt;
+</code></pre>
+</body>
+</html>
